@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>CodeForge — AI code generation & review agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F7F8FA; --panel: #FFFFFF; --border: #E4E7EC;
+    --ink: #1A1D24; --ink-dim: #6B7280;
+    --brand: #2F6FED; --brand-dim: #EAF0FE;
+    --good: #16A34A; --good-dim: #E7F7ED;
+    --warn: #D97706; --warn-dim: #FEF3E2;
+    --bad: #DC2626; --bad-dim: #FDECEC;
+    --code-bg: #0F1115; --code-ink: #E4E7EC;
+    --font: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    box-sizing: border-box; padding-top: env(safe-area-inset-top,0px); padding-bottom: env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#14161B; --panel:#1C1F26; --border:#2A2E37; --ink:#F0F1F4; --ink-dim:#9AA1AE; --brand-dim:#1E2A47; --good-dim:#0F2A1A; --warn-dim:#332107; --bad-dim:#3A1414; }
+  }
+  :root[data-theme="dark"] { --bg:#14161B; --panel:#1C1F26; --border:#2A2E37; --ink:#F0F1F4; --ink-dim:#9AA1AE; --brand-dim:#1E2A47; --good-dim:#0F2A1A; --warn-dim:#332107; --bad-dim:#3A1414; }
+  * { box-sizing: border-box; }
+  html { height:100%; }
+  body { margin:0; min-height:100%; background: var(--bg); color: var(--ink); font-family: var(--font); -webkit-font-smoothing:antialiased; }
+  .wrap { max-width: 860px; margin:0 auto; padding: 24px 16px 50px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing:0.1em; color: var(--brand); text-transform: uppercase; margin-bottom: 8px; }
+  h1 { font-size: 24px; font-weight: 700; margin: 0 0 6px; }
+  .sub { color: var(--ink-dim); font-size: 14px; line-height:1.55; max-width: 66ch; margin-bottom: 20px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    background: none; border: none; padding: 10px 16px; font-family: var(--font); font-weight: 600; font-size: 13.5px;
+    color: var(--ink-dim); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab-btn.active { color: var(--brand); border-bottom-color: var(--brand); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+  .field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .field-row label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--ink-dim); font-family: var(--font-mono); }
+  .field-row select {
+    font-family: var(--font); font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 10px;
+  }
+  textarea.main-input {
+    width:100%; resize: vertical; min-height: 110px; border:1px solid var(--border); border-radius:10px;
+    padding: 12px 14px; font-family: var(--font); font-size: 13.5px; line-height: 1.6; color: var(--ink); background: var(--bg);
+  }
+  textarea.code-input { font-family: var(--font-mono); font-size: 12.5px; min-height: 220px; }
+  textarea.main-input:focus { outline:2px solid var(--brand); outline-offset:-1px; border-color: var(--brand); }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-top: 10px; }
+  .chip { font-size:12px; background: var(--bg); border:1px solid var(--border); color: var(--ink-dim); padding:6px 12px; border-radius:20px; cursor:pointer; }
+  .chip:hover { border-color: var(--brand); color: var(--brand); }
+  button.primary-btn {
+    margin-top: 14px; width:100%; background: var(--brand); color:#fff; border:none; border-radius:10px;
+    padding: 13px; font-family: var(--font); font-weight:600; font-size:14px; cursor:pointer;
+  }
+  button.primary-btn:hover:not(:disabled) { filter: brightness(1.08); }
+  button.primary-btn:disabled { opacity:0.5; cursor:wait; }
+
+  .result-section { margin-top: 18px; display: none; }
+  .code-block-wrap { position: relative; margin-bottom: 14px; }
+  .code-block {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 16px;
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.65; white-space: pre; overflow-x: auto; max-height: 420px; overflow-y: auto;
+  }
+  .code-label {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--ink-dim); margin-bottom: 6px; text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .copy-btn {
+    font-size: 11px; background: var(--panel); border: 1px solid var(--border); color: var(--ink-dim);
+    padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: var(--font);
+  }
+  .copy-btn:hover { border-color: var(--brand); color: var(--brand); }
+
+  .explanation-box { background: var(--brand-dim); border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.6; margin-bottom: 14px; }
+  .explanation-box .eb-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--brand); margin-bottom: 6px; text-transform: uppercase; }
+
+  .preview-frame-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 14px; background: #fff; }
+  .preview-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--ink-dim); padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--border); text-transform: uppercase; }
+  iframe.preview-frame { width: 100%; height: 320px; border: none; display: block; }
+
+  /* ---- review issues ---- */
+  .assessment-box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; font-size: 13.5px; line-height: 1.6; }
+  .issue-card { border-radius: 10px; padding: 13px 15px; margin-bottom: 8px; border-left: 4px solid; }
+  .issue-card.critical { background: var(--bad-dim); border-color: var(--bad); }
+  .issue-card.high { background: var(--bad-dim); border-color: var(--bad); opacity: 0.85; }
+  .issue-card.medium { background: var(--warn-dim); border-color: var(--warn); }
+  .issue-card.low { background: var(--brand-dim); border-color: var(--brand); }
+  .issue-head { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .issue-severity { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 10px; }
+  .issue-card.critical .issue-severity, .issue-card.high .issue-severity { background: var(--bad); color: #fff; }
+  .issue-card.medium .issue-severity { background: var(--warn); color: #fff; }
+  .issue-card.low .issue-severity { background: var(--brand); color: #fff; }
+  .issue-category { font-size: 11px; color: var(--ink-dim); font-weight: 600; }
+  .issue-desc { font-size: 13px; line-height: 1.5; }
+
+  .changes-list { background: var(--good-dim); border-radius: 10px; padding: 14px 16px; margin-top: 4px; }
+  .changes-list .cl-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--good); margin-bottom: 8px; text-transform: uppercase; }
+  .changes-list ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+
+  .empty-note { color: var(--ink-dim); font-size: 13px; text-align: center; padding: 20px 0; }
+
+  footer.credit { text-align:center; margin-top: 30px; font-size:11px; color: var(--ink-dim); opacity:0.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Enterprise Code Agent</div>
+  <h1>CodeForge</h1>
+  <p class="sub">Writes new custom software from a plain-language spec, or reviews and improves existing code — flagging real bugs, security issues, and performance problems, then producing a corrected version with a changelog.</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="build">Build New</button>
+    <button class="tab-btn" data-tab="review">Review &amp; Improve</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-build">
+    <div class="panel">
+      <div class="field-row">
+        <label>Output type
+          <select id="buildType">
+            <option value="widget">Interactive web widget (live preview)</option>
+            <option value="snippet">Code snippet (any language)</option>
+          </select>
+        </label>
+        <label id="langRow" style="display:none;">Language
+          <select id="buildLang">
+            <option>Python</option><option>JavaScript</option><option>Java</option>
+            <option>C#</option><option>Go</option><option>SQL</option><option>TypeScript</option>
+          </select>
+        </label>
+      </div>
+      <textarea class="main-input" id="buildSpec" placeholder="Describe what you want built..."></textarea>
+      <div class="chips" id="buildChips"></div>
+      <button class="primary-btn" id="buildBtn">Generate code</button>
+    </div>
+    <div class="result-section" id="buildResult"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-review">
+    <div class="panel">
+      <div class="field-row">
+        <label>Language<select id="reviewLang"><option>Auto-detect</option><option>Python</option><option>JavaScript</option><option>Java</option><option>C#</option><option>Go</option><option>SQL</option><option>TypeScript</option></select></label>
+      </div>
+      <textarea class="main-input code-input" id="reviewCode" placeholder="Paste existing code here..."></textarea>
+      <textarea class="main-input" id="reviewContext" placeholder="Optional: anything the reviewer should know (e.g. 'this runs in a high-traffic payment flow')" style="min-height:50px; margin-top:10px;"></textarea>
+      <div class="chips" id="reviewChips"></div>
+      <button class="primary-btn" id="reviewBtn">Review &amp; improve this code</button>
+    </div>
+    <div class="result-section" id="reviewResult"></div>
+  </div>
+
+  <footer class="credit">CodeForge — built with the Claude API</footer>
+</div>
+
+<script>
+/* =========================================================
+   Examples
+   ========================================================= */
+const BUILD_EXAMPLES = [
+  { label: 'Time-off request widget', type: 'widget', text: 'A simple employee time-off request form: start date, end date, reason dropdown (Vacation/Sick/Personal), and a submit button that shows a confirmation message. Clean, professional styling.' },
+  { label: 'Invoice total calculator', type: 'widget', text: 'A widget where you can add line items (description + quantity + unit price), it calculates a running subtotal, applies an 8% tax rate, and shows the final total. Include a remove button per line item.' },
+  { label: 'Email validator function', type: 'snippet', lang: 'Python', text: 'A function that validates whether a string is a properly formatted email address, with clear docstring and a few inline test cases.' },
+  { label: 'Customer lookup SQL', type: 'snippet', lang: 'SQL', text: 'A query that finds all customers who have placed more than 3 orders in the last 90 days, along with their total spend, ordered by total spend descending.' }
+];
+const buildChipsEl = document.getElementById('buildChips');
+BUILD_EXAMPLES.forEach(ex => {
+  const chip = document.createElement('button');
+  chip.className = 'chip'; chip.type = 'button'; chip.textContent = ex.label;
+  chip.addEventListener('click', () => {
+    document.getElementById('buildSpec').value = ex.text;
+    document.getElementById('buildType').value = ex.type;
+    toggleLangRow();
+    if (ex.lang) document.getElementById('buildLang').value = ex.lang;
+  });
+  buildChipsEl.appendChild(chip);
+});
+
+const REVIEW_EXAMPLES = [
+  {
+    label: 'SQL injection risk', lang: 'Python',
+    text: `def get_user(username):
+    query = "SELECT * FROM users WHERE username = '" + username + "'"
+    cursor.execute(query)
+    return cursor.fetchone()`
+  },
+  {
+    label: 'Missing error handling', lang: 'JavaScript',
+    text: `function processPayment(amount, cardToken) {
+  const result = paymentGateway.charge(cardToken, amount);
+  updateOrderStatus(result.orderId, 'paid');
+  return result;
+}`
+  },
+  {
+    label: 'Inefficient loop', lang: 'Python',
+    text: `def find_duplicates(items):
+    duplicates = []
+    for i in range(len(items)):
+        for j in range(len(items)):
+            if i != j and items[i] == items[j] and items[i] not in duplicates:
+                duplicates.append(items[i])
+    return duplicates`
+  }
+];
+const reviewChipsEl = document.getElementById('reviewChips');
+REVIEW_EXAMPLES.forEach(ex => {
+  const chip = document.createElement('button');
+  chip.className = 'chip'; chip.type = 'button'; chip.textContent = ex.label;
+  chip.addEventListener('click', () => {
+    document.getElementById('reviewCode').value = ex.text;
+    document.getElementById('reviewLang').value = ex.lang;
+  });
+  reviewChipsEl.appendChild(chip);
+});
+
+document.getElementById('buildType').addEventListener('change', toggleLangRow);
+function toggleLangRow() {
+  document.getElementById('langRow').style.display = document.getElementById('buildType').value === 'snippet' ? 'flex' : 'none';
+}
+
+/* =========================================================
+   Claude sample capability
+   ========================================================= */
+async function sampleJSON(prompt) {
+  const sample = await claude.use('sample');
+  if (!sample) throw { code: 'not_available', message: "AI access isn't available in this view." };
+  return sample.json(prompt, { modelTier: 'default' });
+}
+
+/* =========================================================
+   Build New
+   ========================================================= */
+document.getElementById('buildBtn').addEventListener('click', buildCode);
+
+async function buildCode() {
+  const spec = document.getElementById('buildSpec').value.trim();
+  if (!spec) return;
+  const type = document.getElementById('buildType').value;
+  const lang = document.getElementById('buildLang').value;
+
+  const btn = document.getElementById('buildBtn');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  const resultEl = document.getElementById('buildResult');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div class="empty-note">Writing code to spec...</div>';
+
+  try {
+    if (type === 'widget') {
+      const prompt = `You are an expert frontend developer. Build a complete, self-contained, professional-looking interactive web widget for this requirement:
+
+"${spec}"
+
+Requirements:
+- A single self-contained HTML document: inline <style> and inline <script>, no external dependencies, no external fonts or CDN links
+- Clean, modern, professional business styling (not flashy) — this is for enterprise internal tools
+- Fully functional — all buttons/interactions should actually work
+- Responsive, reasonable default sizing
+
+Respond ONLY with valid JSON in exactly this shape:
+{
+  "explanation": "2-3 sentences explaining what you built and how it works",
+  "html": "the complete self-contained HTML document as a single string, starting with <!DOCTYPE html>"
+}`;
+      const result = await sampleJSON(prompt);
+      resultEl.innerHTML = `
+        <div class="explanation-box"><div class="eb-label">What this does</div>${escapeHtml(result.explanation || '')}</div>
+        <div class="preview-frame-wrap">
+          <div class="preview-label">Live Preview (sandboxed)</div>
+          <iframe class="preview-frame" sandbox="allow-scripts" id="previewFrame"></iframe>
+        </div>
+        <div class="code-block-wrap">
+          <div class="code-label">Generated Code (HTML/CSS/JS)<button class="copy-btn" id="copyBuildBtn">Copy</button></div>
+          <div class="code-block" id="buildCodeBlock">${escapeHtml(result.html || '')}</div>
+        </div>
+      `;
+      document.getElementById('previewFrame').srcdoc = result.html || '';
+      document.getElementById('copyBuildBtn').addEventListener('click', () => copyText(result.html || '', 'copyBuildBtn'));
+    } else {
+      const prompt = `You are an expert ${lang} developer writing production-quality code for an enterprise codebase. Write code for this requirement:
+
+"${spec}"
+
+Write clean, well-commented, idiomatic ${lang} code following best practices for that language. Include basic error handling where appropriate.
+
+Respond ONLY with valid JSON in exactly this shape:
+{
+  "explanation": "2-3 sentences explaining the approach",
+  "code": "the complete code as a single string"
+}`;
+      const result = await sampleJSON(prompt);
+      resultEl.innerHTML = `
+        <div class="explanation-box"><div class="eb-label">Approach</div>${escapeHtml(result.explanation || '')}</div>
+        <div class="code-block-wrap">
+          <div class="code-label">${escapeHtml(lang)}<button class="copy-btn" id="copyBuildBtn">Copy</button></div>
+          <div class="code-block" id="buildCodeBlock">${escapeHtml(result.code || '')}</div>
+        </div>
+      `;
+      document.getElementById('copyBuildBtn').addEventListener('click', () => copyText(result.code || '', 'copyBuildBtn'));
+    }
+  } catch (err) {
+    console.error(err);
+    resultEl.innerHTML = `<div class="empty-note">Could not generate code (${err && err.code ? err.code : 'unknown'}). Try again.</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Generate code';
+  }
+}
+toggleLangRow();
+
+/* =========================================================
+   Review & Improve
+   ========================================================= */
+document.getElementById('reviewBtn').addEventListener('click', reviewCode);
+
+async function reviewCode() {
+  const code = document.getElementById('reviewCode').value.trim();
+  if (!code) return;
+  const lang = document.getElementById('reviewLang').value;
+  const context = document.getElementById('reviewContext').value.trim();
+
+  const btn = document.getElementById('reviewBtn');
+  btn.disabled = true; btn.textContent = 'Reviewing...';
+  const resultEl = document.getElementById('reviewResult');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div class="empty-note">Analyzing code for bugs, security issues, and performance problems...</div>';
+
+  const prompt = `You are a senior code reviewer examining this code for an enterprise codebase.
+${lang !== 'Auto-detect' ? `Language: ${lang}` : 'Detect the language yourself.'}
+${context ? `Context from the developer: ${context}` : ''}
+
+Code to review:
+"""
+${code}
+"""
+
+Find real, specific issues — bugs, security vulnerabilities (e.g. injection risks, missing input validation), performance problems, and significant style/best-practice violations. Don't invent issues that aren't there; if the code is genuinely solid, say so. Then produce an improved version that fixes the real issues found.
+
+Respond ONLY with valid JSON in exactly this shape:
+{
+  "language_detected": "the language",
+  "overall_assessment": "2-3 sentences on the overall code quality",
+  "issues": [
+    { "severity": "critical" or "high" or "medium" or "low", "category": "bug" or "security" or "performance" or "style", "description": "specific description of the issue and why it matters" }
+  ],
+  "improved_code": "the complete corrected/improved version of the code",
+  "summary_of_changes": ["specific change 1", "specific change 2"]
+}
+
+If there are no real issues, return an empty issues array rather than inventing minor nitpicks.`;
+
+  try {
+    const result = await sampleJSON(prompt);
+    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    const issues = (result.issues || []).sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9));
+
+    resultEl.innerHTML = `
+      <div class="assessment-box"><strong>${escapeHtml(result.language_detected || '')}</strong> — ${escapeHtml(result.overall_assessment || '')}</div>
+      ${issues.length ? issues.map(i => `
+        <div class="issue-card ${i.severity}">
+          <div class="issue-head">
+            <span class="issue-severity">${escapeHtml(i.severity)}</span>
+            <span class="issue-category">${escapeHtml(i.category)}</span>
+          </div>
+          <div class="issue-desc">${escapeHtml(i.description)}</div>
+        </div>
+      `).join('') : '<div class="empty-note">No significant issues found.</div>'}
+      <div class="code-block-wrap" style="margin-top:16px;">
+        <div class="code-label">Improved Version<button class="copy-btn" id="copyReviewBtn">Copy</button></div>
+        <div class="code-block" id="reviewCodeBlock">${escapeHtml(result.improved_code || '')}</div>
+      </div>
+      <div class="changes-list">
+        <div class="cl-label">Summary of Changes</div>
+        <ul>${(result.summary_of_changes || []).map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+      </div>
+    `;
+    document.getElementById('copyReviewBtn').addEventListener('click', () => copyText(result.improved_code || '', 'copyReviewBtn'));
+  } catch (err) {
+    console.error(err);
+    resultEl.innerHTML = `<div class="empty-note">Could not review code (${err && err.code ? err.code : 'unknown'}). Try again.</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Review & improve this code';
+  }
+}
+
+/* =========================================================
+   Tabs, utilities
+   ========================================================= */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+function copyText(text, btnId) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById(btnId);
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }).catch(() => {});
+}
+
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+</script>
+</body>
+</html>
